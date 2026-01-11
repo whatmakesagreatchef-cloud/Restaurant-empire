@@ -8,6 +8,7 @@ export function defaultState(){
     route: "world",
     seenSetup: false,
     tutorialDone: {},
+    walkthrough: { active:false },
     week: 1,
     homeCityId: null,
 
@@ -213,4 +214,10 @@ export async function importSave(file){
 
 export function resetSave(){
   localStorage.removeItem(KEY);
+}
+
+
+// for UI reset button
+if(typeof window !== 'undefined'){
+  window.__RESIM_DEFAULT_STATE__ = defaultState;
 }
