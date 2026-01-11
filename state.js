@@ -6,6 +6,8 @@ export function defaultState(){
     version: 4,
     seed,
     route: "world",
+    seenSetup: false,
+    tutorialDone: {},
     week: 1,
     homeCityId: null,
 
@@ -91,6 +93,8 @@ function migrate(s){
   if(!s.hq.contracts) s.hq.contracts = [];
   if(!s.supplyIndex) s.supplyIndex = {};
   if(!s.supplyLog) s.supplyLog = [];
+  if(!s.inventoryLog) s.inventoryLog = [];
+  if(!s.facilityLog) s.facilityLog = [];
   if(!s.auditLog) s.auditLog = [];
   if(!s.reviewFeed) s.reviewFeed = [];
   if(!s.accounting) s.accounting = { taxRate: 0.25, taxAccrued: 0, retained: 0 };
@@ -161,6 +165,12 @@ function migrate(s){
     // Reviews
     if(v.reviewBuzz==null) v.reviewBuzz = 0;
     if(!v.reviewStats) v.reviewStats = { avgStars:0, total:0, newThisWeek:0, negativeThisWeek:0 };
+
+    // Inventory
+    if(!v.inventory) v.inventory = { autoReorder:true, parWeeks:1.2, storageLevel:1, lastStocktakeWeek:-999, cats:{}, orders:[] };
+
+    // Facilities
+    if(!v.facilities) v.facilities = { condition:75, maintenanceLevel:1.0, downtimeWeeks:0, activeIssues:[], equipment:{}, renovation:null };
     if(v.customer){
       if(v.customer.regulars == null) v.customer.regulars = (v.regulars||0);
       if(!v.customer.inbox) v.customer.inbox = [];

@@ -5,6 +5,8 @@ import { runWeek } from "./system_sim.js";
 import { generateInvestorOffers, acceptInvestorOffer, totalOutsideEquity, setDividendsPolicy, pressureStatus, estimateBuyoutCost, buyOutInvestor, requiresSaleApproval } from "./system_investors.js";
 import { generateListings, upfrontCostForLease, estimateOccupancyPct } from "./system_property_market.js";
 import { ensureSupplyState, listCategories, suppliersFor, supplierById, setVenueSupplier, setCentralPurchasing, activeContract, createContract, breakContract } from "./system_suppliers.js";
+import { ensureInventoryState, ensureVenueInventory, setParWeeks, setAutoReorder, placeOrder, upgradeStorage, stocktake, storageProfile } from "./system_inventory.js";
+import { ensureFacilitiesState, ensureVenueFacilities, setMaintenanceLevel, scheduleRenovation, cancelRenovation } from "./system_facilities.js";
 import { ensureBrands, listBrands, createBrand, setBrandMode, setBrandStandards, setBrandPlaybook, brandById } from "./system_brands.js";
 import { generateCandidates, hireCandidate, fireRole, weeklyWages, stationWages, adjustStationStaff, ensureRoster, rosterWeeklyCost, recommendedPerShift, applyTraining, trainingOptions } from "./system_staff.js";
 import { mulberry32, randInt, clamp, pick } from "./rng.js";
@@ -27,7 +29,7 @@ export function render(state, setState){
 
   const topbarMeta = document.getElementById("topbarMeta");
   const city = state.homeCityId ? cityById(state.homeCityId) : null;
-  topbarMeta.textContent = `Week ${state.week} • Cash ${money(state.cash)}${city ? " • " + city.name : ""}`;
+  topbarMeta.innerHTML = `<span>Week ${state.week} • Cash ${money(state.cash)}${city ? " • " + escapeHtml(city.name) : ""}</span><button class="helpbtn" data-action="help" title="Setup & tutorials">?</button>`;
 
   if(state.sold){
     app.appendChild(renderSold(state, setState));
@@ -35,14 +37,115 @@ export function render(state, setState){
   }
 
   switch(state.route){
+    case "setup": app.appendChild(screenSetup(state, setState)); break;
     case "world": app.appendChild(screenWorld(state, setState)); break;
     case "venues": app.appendChild(screenVenues(state, setState)); break;
     case "ops": app.appendChild(screenOps(state, setState)); break;
     case "hq": app.appendChild(screenHQ(state, setState)); break;
     case "capital": app.appendChild(screenCapital(state, setState)); break;
     case "sell": app.appendChild(screenSell(state, setState)); break;
-    default: app.appendChild(screenWorld(state, setState));
+    default: app.appendChild(screenWorld(state, setState));appendChild(screenWorld(state, setState));
   }
+}
+
+
+/* -----------------------------
+   SETUP & TUTORIALS
+------------------------------*/
+function screenSetup(state, setState){
+  const wrap = document.createElement("div");
+
+  wrap.appendChild(el(`
+    <div class="card">
+      <div class="h1">Setup & Tutorials</div>
+      <div class="small">This sim is deep. Use the guided setup to open your first venue, then run week-by-week ops. You can always come back here from the <b>?</b> button.</div>
+      <div class="hr"></div>
+      <div class="row" style="gap:10px; flex-wrap:wrap;">
+        <button class="btn primary" id="btnStartWizard">Start setup wizard</button>
+        <button class="btn" id="btnQuickStart">Quick start</button>
+        <button class="btn" id="btnMarkDone">Skip / I’m good</button>
+      </div>
+    </div>
+  `));
+
+  wrap.appendChild(el(`
+    <div class="card" style="margin-top:12px; background:rgba(255,255,255,.03);">
+      <div class="h2">How the sim works (30 seconds)</div>
+      <div class="small">
+        <b>Money</b>: cash is king. Loans boost cash but add payments. Depreciation is non-cash. Tax accrues on profit.<br/>
+        <b>Demand</b>: promos + reviews + reputation influence covers. Facilities downtime caps covers.<br/>
+        <b>Operations</b>: each week calculates sales, COGS, labour, issues, reviews, compliance, inventory, facilities.
+      </div>
+    </div>
+  `));
+
+  // Tutorial library (tap to expand)
+  const topics = [
+    { id:"wizard", title:"1) Setup wizard", body:"Acquire a listing (lease or buy), choose whether you keep it or convert, set concept + menu style, then staff hires and launch." },
+    { id:"service", title:"2) Service model", body:"Service speed, ticket time, satisfaction and refunds. Stockouts and breakdowns hit speed and satisfaction." },
+    { id:"menu", title:"3) Menu + pricing", body:"Adjust pricing, margin, popularity and engineering. High price position can raise spend but can lower demand if reputation is low." },
+    { id:"reviews", title:"4) Reviews + reply strategy", body:"Reviews land on different platforms. Replies can recover demand (or make it worse). Viral low-star spikes hit demand for weeks." },
+    { id:"staff", title:"5) Staff + issues", body:"Hire roles (GM/Chef/FOH), delegation, morale, absenteeism. Strong leadership reduces weekly headaches." },
+    { id:"inventory", title:"6) Inventory", body:"Par levels by category, auto reorder, lead times, reliability delays. Stockouts cause emergency buys + satisfaction penalties. Stocktakes reduce shrink." },
+    { id:"facilities", title:"7) Facilities", body:"Maintenance spend, energy costs, condition, breakdowns, renovations. Poor condition increases risk and utilities." },
+    { id:"compliance", title:"8) Audits & compliance", body:"Inspections and closure risk. Facilities issues (e.g., fridge failure) can hurt compliance." },
+    { id:"empire", title:"9) Empire + sell score", body:"Expand globally or perfect one venue. When you sell, score is based on net worth + prestige (and how you got there)." },
+  ];
+
+  wrap.appendChild(el(`
+    <div class="card" style="margin-top:12px;">
+      <div class="h2">Tutorials</div>
+      <div class="small">Tap a topic to open it.</div>
+      <div class="hr"></div>
+      ${topics.map(t=>`
+        <button class="btn" style="width:100%; text-align:left; margin:8px 0;" data-tut="${t.id}">
+          <b>${escapeHtml(t.title)}</b><div class="small">${escapeHtml(t.body)}</div>
+        </button>
+      `).join("")}
+    </div>
+  `));
+
+  wrap.appendChild(el(`
+    <div class="card" style="margin-top:12px; background:rgba(255,255,255,.03);">
+      <div class="h2">Recommended first run</div>
+      <div class="small">
+        1) Start setup wizard → open your first venue<br/>
+        2) Run 4–8 weeks → watch Ops snapshots (Accounting / Inventory / Facilities)<br/>
+        3) Tune par levels + maintenance<br/>
+        4) Expand or refine → then sell when you want your final score
+      </div>
+    </div>
+  `));
+
+  // Buttons
+  wrap.querySelector("#btnStartWizard").onclick = ()=>{
+    setState(s=>{ s.route="venues"; s._openWizard=true; s.seenSetup=true; return s; });
+  };
+  wrap.querySelector("#btnQuickStart").onclick = ()=>{
+    // If no venues, jump to venues acquire
+    if((state.venues||[]).length===0){
+      setState(s=>{ s.route="venues"; s._openWizard=true; s.seenSetup=true; return s; });
+    }else{
+      setState(s=>{ s.route="ops"; s.seenSetup=true; return s; });
+    }
+  };
+  wrap.querySelector("#btnMarkDone").onclick = ()=>{
+    setState(s=>{ s.seenSetup=true; s.route="world"; return s; });
+  };
+
+  // Tutorial click: for now, just navigate to the most relevant screen
+  wrap.addEventListener("click", (e)=>{
+    const b = e.target.closest("[data-tut]");
+    if(!b) return;
+    const id = b.getAttribute("data-tut");
+    if(id==="wizard") setState(s=>{ s.route="venues"; s._openWizard=true; s.seenSetup=true; return s; });
+    else if(id==="inventory" || id==="facilities" || id==="staff" || id==="menu") setState(s=>{ s.route="venues"; s.seenSetup=true; return s; });
+    else if(id==="reviews" || id==="service") setState(s=>{ s.route="ops"; s.seenSetup=true; return s; });
+    else if(id==="compliance") setState(s=>{ s.route="hq"; s.seenSetup=true; return s; });
+    else if(id==="empire") setState(s=>{ s.route="sell"; s.seenSetup=true; return s; });
+  });
+
+  return wrap;
 }
 
 /* -----------------------------
@@ -188,6 +291,8 @@ function screenVenues(state, setState){
         <button class="btn" data-mgtab="overview">Overview</button>
         <button class="btn" data-mgtab="staff">Staff</button>
         <button class="btn" data-mgtab="suppliers">Suppliers</button>
+        <button class="btn" data-mgtab="inventory">Inventory</button>
+        <button class="btn" data-mgtab="facilities">Facilities</button>
         <button class="btn" data-mgtab="compliance">Compliance</button>
         <button class="btn" data-mgtab="menu">Menu</button>
         <button class="btn" data-mgtab="settings">Settings</button>
@@ -851,6 +956,8 @@ function renderWizVenue(){
     if(mgTab === "overview") mgBody.appendChild(manageOverview(v));
     if(mgTab === "staff") mgBody.appendChild(manageStaff(v, state, setState, ()=>openManage(v.id,"staff")));
     if(mgTab === "suppliers") mgBody.appendChild(manageSuppliers(v, state, setState));
+    if(mgTab === "inventory") mgBody.appendChild(manageInventory(v, state, setState));
+    if(mgTab === "facilities") mgBody.appendChild(manageFacilities(v, state, setState));
     if(mgTab === "compliance") mgBody.appendChild(manageCompliance(v, state, setState));
     if(mgTab === "menu") mgBody.appendChild(manageMenu(v, state, setState));
     if(mgTab === "settings") mgBody.appendChild(manageSettings(v));
@@ -1632,6 +1739,249 @@ function manageSuppliers(v, state, setState){
 }
 
 
+
+  function manageInventory(v, state, setState){
+    ensureInventoryState(state);
+    ensureVenueInventory(v);
+
+    const inv = v.inventory;
+    const prof = storageProfile(inv.storageLevel||1);
+
+    const panel = document.createElement("div");
+
+    const cats = listCategories(); // reuse supplier categories
+    const rows = cats.map(c=>{
+      const b = inv.cats[c.id] || { onHand:0, incoming:0, parTarget:0 };
+      const need = Math.max(0, (b.parTarget||0) - ((b.onHand||0) + (b.incoming||0)));
+      return {
+        id: c.id,
+        name: c.name,
+        onHand: Math.round(b.onHand||0),
+        incoming: Math.round(b.incoming||0),
+        par: Math.round(b.parTarget||0),
+        need: Math.round(need)
+      };
+    });
+
+    panel.appendChild(el(`
+      <div class="card" style="background:rgba(255,255,255,.03);">
+        <div class="h2">Inventory</div>
+        <div class="small">Track stock by category. Low par or delivery delays can cause stockouts + emergency buys. Stocktakes reduce shrink.</div>
+        <div class="hr"></div>
+
+        <div class="row" style="gap:10px; flex-wrap:wrap; align-items:center;">
+          <div class="kpi"><div class="label">Auto reorder</div><div class="value">${inv.autoReorder ? "ON" : "OFF"}</div></div>
+          <button class="btn ${inv.autoReorder?'primary':''}" data-invact="toggleAuto">${inv.autoReorder?"Disable":"Enable"}</button>
+          <button class="btn" data-invact="stocktake">Stocktake</button>
+          <button class="btn" data-invact="upgradeStorage">Upgrade storage</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="row" style="gap:10px; align-items:center;">
+          <div class="small"><b>Par (weeks of stock)</b> ${(inv.parWeeks||1.2).toFixed(2)}w</div>
+          <input type="range" min="0.6" max="2.2" step="0.05" value="${inv.parWeeks||1.2}" data-invpar style="flex:1;"/>
+        </div>
+
+        <div class="row" style="gap:10px; margin-top:8px; flex-wrap:wrap;">
+          <div class="small"><b>Storage</b> Level ${inv.storageLevel||1} (${escapeHtml(prof.label)})</div>
+          <div class="small">Cap multiplier: ${(prof.capMult||1).toFixed(2)}×</div>
+          ${prof.capex && (inv.storageLevel||1)<4 ? `<div class="small">Next upgrade capex: ${money(prof.capex)}</div>` : `<div class="small">Max level reached.</div>`}
+        </div>
+      </div>
+    `));
+
+    panel.appendChild(el(`
+      <div class="card" style="margin-top:12px;">
+        <div class="h2">Stock by category</div>
+        <div class="small">Values are $-based. “Order to par” buys enough to hit your target (subject to storage & cash).</div>
+        <div class="hr"></div>
+
+        ${rows.map(r=>`
+          <div class="card" style="margin:10px 0; background:rgba(255,255,255,.03);">
+            <div class="row" style="justify-content:space-between; gap:10px;">
+              <div><b>${escapeHtml(r.name)}</b> <span class="small">(${r.id})</span></div>
+              <div class="small">Par: ${money(r.par)}</div>
+            </div>
+            <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:8px;">
+              <div class="kpi"><div class="label">On hand</div><div class="value">${money(r.onHand)}</div></div>
+              <div class="kpi"><div class="label">Incoming</div><div class="value">${money(r.incoming)}</div></div>
+              <div class="kpi"><div class="label">Need</div><div class="value ${r.need>0?'warn':'good'}">${money(r.need)}</div></div>
+            </div>
+            <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap;">
+              <button class="btn ${r.need>0?'primary':''}" data-invact="orderToPar" data-cat="${r.id}" data-need="${r.need}">Order to par</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `));
+
+    // handlers
+    panel.addEventListener("click", (e)=>{
+      const b = e.target.closest("[data-invact]");
+      if(!b) return;
+      const act = b.getAttribute("data-invact");
+
+      if(act==="toggleAuto"){
+        setState(s=>{
+          setAutoReorder(s, v.id, !v.inventory.autoReorder);
+          return s;
+        });
+        return;
+      }
+
+      if(act==="stocktake"){
+        setState(s=>{
+          stocktake(s, v.id);
+          return s;
+        });
+        return;
+      }
+
+      if(act==="upgradeStorage"){
+        setState(s=>{
+          upgradeStorage(s, v.id);
+          return s;
+        });
+        return;
+      }
+
+      if(act==="orderToPar"){
+        const cat = b.getAttribute("data-cat");
+        const need = Number(b.getAttribute("data-need")||0);
+        setState(s=>{
+          // use deterministic rng based on state
+          const rng = mulberry32((s.seed + s.week*99991)>>>0);
+          placeOrder(s, v, cat, need, rng);
+          return s;
+        });
+        return;
+      }
+    });
+
+    const par = panel.querySelector("[data-invpar]");
+    if(par){
+      par.addEventListener("input", (e)=>{
+        const val = Number(e.target.value||1.2);
+        setState(s=>{
+          setParWeeks(s, v.id, val);
+          return s;
+        });
+      });
+    }
+
+    return panel;
+  }
+
+
+  function manageFacilities(v, state, setState){
+    ensureFacilitiesState(state);
+    ensureVenueFacilities(v);
+
+    const f = v.facilities;
+
+    const panel = document.createElement("div");
+
+    const issues = (f.activeIssues||[]).map(x=>{
+      const label = x.eqId || "equipment";
+      return { id:x.id, label, weeksLeft:x.weeksLeft||1, speedHit:x.speedHit||0, foodHit:x.foodHit||0, compHit:x.complianceHit||0 };
+    });
+
+    panel.appendChild(el(`
+      <div class="card" style="background:rgba(255,255,255,.03);">
+        <div class="h2">Facilities</div>
+        <div class="small">Equipment breakdowns reduce covers + slow service. Maintenance spend reduces breakdown risk and improves condition. Renovations can boost reputation but cause downtime.</div>
+        <div class="hr"></div>
+
+        <div class="row" style="gap:10px; flex-wrap:wrap;">
+          <div class="kpi"><div class="label">Condition</div><div class="value ${(f.condition>=70?"good":(f.condition>=55?"warn":"bad"))}">${Math.round(f.condition||0)}/100</div></div>
+          <div class="kpi"><div class="label">Maintenance</div><div class="value">${(f.maintenanceLevel||1).toFixed(2)}×</div></div>
+          <div class="kpi"><div class="label">Downtime</div><div class="value">${Math.round(f.downtimeWeeks||0)}w</div></div>
+          <div class="kpi"><div class="label">Open issues</div><div class="value">${issues.length}</div></div>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="row" style="gap:10px; align-items:center;">
+          <div class="small"><b>Maintenance level</b></div>
+          <input type="range" min="0.60" max="1.50" step="0.05" value="${f.maintenanceLevel||1.0}" data-facmaint style="flex:1;"/>
+          <div class="small">${(f.maintenanceLevel||1.0).toFixed(2)}×</div>
+        </div>
+
+        ${(f.renovation ? `
+          <div class="hr"></div>
+          <div class="row" style="justify-content:space-between; gap:10px;">
+            <div class="small"><b>Renovation in progress</b>: ${escapeHtml(f.renovation.id)} • ${f.renovation.weeksLeft}w left</div>
+            <button class="btn" data-facact="cancelReno">Cancel</button>
+          </div>
+        ` : `
+          <div class="hr"></div>
+          <div class="h2">Renovations</div>
+          <div class="small">Choose a renovation. Costs cash now. Expect downtime for the duration.</div>
+          <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:10px;">
+            <button class="btn" data-facact="reno" data-reno="refresh">Cosmetic refresh</button>
+            <button class="btn" data-facact="reno" data-reno="kitchen">Kitchen overhaul</button>
+            <button class="btn" data-facact="reno" data-reno="full">Full refit</button>
+          </div>
+        `)}
+      </div>
+    `));
+
+    panel.appendChild(el(`
+      <div class="card" style="margin-top:12px;">
+        <div class="h2">Active issues</div>
+        ${(issues.length ? issues.map(it=>`
+          <div class="card" style="margin:10px 0; background:rgba(255,255,255,.03);">
+            <div class="row" style="justify-content:space-between; gap:10px;">
+              <div><b>${escapeHtml(it.label)}</b></div>
+              <div class="small">${it.weeksLeft}w</div>
+            </div>
+            <div class="small" style="margin-top:6px;">
+              Speed -${it.speedHit}, Food -${it.foodHit}${it.compHit?`, Compliance -${it.compHit}`:""}
+            </div>
+          </div>
+        `).join("") : `<div class="small">No active issues.</div>`)}
+      </div>
+    `));
+
+    // click handlers
+    panel.addEventListener("click", (e)=>{
+      const b = e.target.closest("[data-facact]");
+      if(!b) return;
+      const act = b.getAttribute("data-facact");
+
+      if(act==="reno"){
+        const rid = b.getAttribute("data-reno");
+        setState(s=>{
+          scheduleRenovation(s, v.id, rid);
+          return s;
+        });
+        return;
+      }
+
+      if(act==="cancelReno"){
+        setState(s=>{
+          cancelRenovation(s, v.id);
+          return s;
+        });
+        return;
+      }
+    });
+
+    const maint = panel.querySelector("[data-facmaint]");
+    if(maint){
+      maint.addEventListener("input", (e)=>{
+        const val = Number(e.target.value||1.0);
+        setState(s=>{
+          setMaintenanceLevel(s, v.id, val);
+          return s;
+        });
+      });
+    }
+
+    return panel;
+  }
+
 function manageCompliance(v, state, setState){
   const wrap = document.createElement("div");
 
@@ -2140,6 +2490,38 @@ function screenOps(state, setState){
       </div>
     </div>
   `));
+
+  wrap.appendChild(el(`
+    <div class="card" style="background:rgba(255,255,255,.03);">
+      <div class="h2">Inventory snapshot</div>
+      <div class="small">Waste includes spoilage + shrink. Stockouts trigger emergency buys + satisfaction penalties.</div>
+      <div class="hr"></div>
+      <div class="row" style="flex-wrap:wrap; gap:10px;">
+        <div class="kpi"><div class="label">Waste</div><div class="value">${money(r.invWaste||0)}</div></div>
+        <div class="kpi"><div class="label">Inv stockouts</div><div class="value">${r.invStockouts||0}</div></div>
+        <div class="kpi"><div class="label">Inv emergency</div><div class="value">${money(r.invEmergency||0)}</div></div>
+        <div class="kpi"><div class="label">On hand</div><div class="value">${money(r.invOnHand||0)}</div></div>
+        <div class="kpi"><div class="label">Incoming</div><div class="value">${money(r.invIncoming||0)}</div></div>
+      </div>
+    </div>
+  `));
+
+  wrap.appendChild(el(`
+    <div class="card" style="background:rgba(255,255,255,.03);">
+      <div class="h2">Facilities snapshot</div>
+      <div class="small">Maintenance + utilities are real costs. Breakdowns can force downtime and slow service.</div>
+      <div class="hr"></div>
+      <div class="row" style="flex-wrap:wrap; gap:10px;">
+        <div class="kpi"><div class="label">Maintenance</div><div class="value">${money(r.facMaint||0)}</div></div>
+        <div class="kpi"><div class="label">Energy</div><div class="value">${money(r.facEnergy||0)}</div></div>
+        <div class="kpi"><div class="label">New issues</div><div class="value">${r.facNewIssues||0}</div></div>
+        <div class="kpi"><div class="label">Venues down</div><div class="value">${r.facDownVenues||0}</div></div>
+        <div class="kpi"><div class="label">Avg condition</div><div class="value">${(r.facAvgCondition? r.facAvgCondition.toFixed(1):"0.0")}</div></div>
+      </div>
+    </div>
+  `));
+
+
   wrap.appendChild(el(`
     <div class="card" style="background:rgba(255,255,255,.03);">
       <div class="h2">Empire review feed</div>

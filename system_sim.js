@@ -7,6 +7,8 @@ import { computeMenuMetrics } from "./system_menu.js";
 import { activePromoEffects, tickPromos, applyMenuPopularityDecay } from "./system_promos.js";
 import { processCustomerWeek } from "./system_customers.js";
 import { ensureReviewState, ingestVenueReviews } from "./system_reviews.js";
+import { ensureInventoryState, tickInventoryWeek } from "./system_inventory.js";
+import { ensureFacilitiesState, computeFacilityEffects, tickFacilitiesWeek } from "./system_facilities.js";
 import { tickStaffIssues } from "./system_staff_events.js";
 import { ensureQuests, rollNewQuests, tickQuests, trackLoyaltyWeeks } from "./system_quests.js";
 import { ensureSupplyState, tickSupplyMarket, venueSupplyEffects } from "./system_suppliers.js";
@@ -29,6 +31,8 @@ export function runWeek(state){
   ensureAuditState(state);
   ensureReviewState(state);
   ensureAccounting(state);
+  ensureInventoryState(state);
+  ensureFacilitiesState(state);
   tickSupplyMarket(state);
 
   const rng = mulberry32(state.seed + state.week * 99991);
@@ -58,6 +62,8 @@ export function runWeek(state){
   let reviewsNew = 0, reviewsNeg = 0, starsSum = 0, starsN = 0;
   let depExpense = 0, interestExpense = 0, loanPayment = 0, principalPaid = 0, taxExpense = 0;
   let profitBeforeTax = 0, profitAfterTax = 0;
+  let invWaste = 0, invStockouts = 0, invEmergency = 0, invOnHand = 0, invIncoming = 0;
+  let facMaint = 0, facEnergy = 0, facNewIssues = 0, facDownVenues = 0, facAvgCondition = 0, facN = 0;
   const closedVenueIds = [];
 
   const macroInflation = 1 + (state.week/5200)*0.05;
@@ -184,15 +190,33 @@ export function runWeek(state){
     // Supply chain effects (cost + stockouts)
     const baseFood = sales * foodPct;
     const supply = venueSupplyEffects(state, v, baseFood);
-    const food = supply.cogs;
+    let food = supply.cogs;
+
+    // Facilities tick (maintenance, energy, breakdowns)
+    const fac = tickFacilitiesWeek(state, v, rng, finalCovers);
+
+    // Inventory (ordering, spoilage, shrink, stockouts)
+    const inv = tickInventoryWeek(state, v, rng, { cogs: food, covers: finalCovers });
+    food += inv.wasteCost + inv.emergencySpend;
 
     const labor = sales * laborPct + wages;
     const occ = sales * occPct;
     const other = sales * otherPct;
     const net = sales - food - labor - occ - other;
 
-    totalStockouts += supply.stockouts;
-    totalEmergency += supply.emergencySpend;
+    totalStockouts += supply.stockouts + inv.stockouts;
+    totalEmergency += supply.emergencySpend + inv.emergencySpend;
+    invWaste += inv.wasteCost;
+    invStockouts += inv.stockouts;
+    invEmergency += inv.emergencySpend;
+    invOnHand += inv.onHand;
+    invIncoming += inv.incoming;
+    facMaint += fac.maintSpend;
+    facEnergy += fac.energy;
+    facNewIssues += fac.newIssues;
+    if(fac.downtimeWeeks>0) facDownVenues += 1;
+    facAvgCondition += fac.condition;
+    facN += 1;
     supplyIndexWeighted += supply.indexAvg * Math.max(1, sales);
     supplyIndexWeight += Math.max(1, sales);
 
@@ -383,6 +407,16 @@ function emptyReport(state){
     reviewsNew: 0,
     reviewsNegative: 0,
     avgStars: 0,
+    invWaste: 0,
+    invStockouts: 0,
+    invEmergency: 0,
+    invOnHand: 0,
+    invIncoming: 0,
+    facMaint: 0,
+    facEnergy: 0,
+    facNewIssues: 0,
+    facDownVenues: 0,
+    facAvgCondition: 0,
     depreciation: 0,
     interest: 0,
     loanPayment: 0,

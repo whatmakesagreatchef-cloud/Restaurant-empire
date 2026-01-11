@@ -3,6 +3,11 @@ import { render } from "./ui_screens.js";
 
 let state = loadState();
 
+// first-run onboarding
+if(!state.seenSetup){
+  state.route = "setup";
+}
+
 // allow ui_screens to request a fresh default
 window.__RESIM_DEFAULT_STATE__ = defaultState;
 
@@ -21,6 +26,12 @@ function refresh(){
 }
 
 document.addEventListener("click", (e)=>{
+  const help = e.target.closest("[data-action=\"help\"]");
+  if(help){
+    setState(s=>{ s.route = "setup"; return s; });
+    return;
+  }
+
   const tab = e.target.closest(".tab");
   if(tab){
     const r = tab.getAttribute("data-route");

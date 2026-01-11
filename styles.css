@@ -145,3 +145,17 @@ label{ display:block; font-size:12px; color: var(--muted); margin:10px 0 6px; }
   height:100%;
   background:rgba(255,255,255,.35);
 }
+
+
+/* Help / setup button in topbar */
+.helpbtn{
+  margin-left: 10px;
+  border: 1px solid rgba(255,255,255,.25);
+  background: rgba(255,255,255,.08);
+  color: inherit;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.helpbtn:active{ transform: translateY(1px); }

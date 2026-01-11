@@ -107,3 +107,26 @@ v1.16 — Accounting (P&L + Loans + Depreciation + Tax)
 - Depreciation: upfront fit-out CAPEX + goodwill are capitalized and depreciated weekly
 - Tax: accrues on profit before tax (pay from HQ)
 - Ops: Accounting snapshot card (profit pre/post tax, dep, interest, loan payments, net worth)
+
+
+v1.17 — Inventory (Par levels + Orders + Spoilage/Shrink)
+- New Inventory tab per venue: auto reorder toggle, par (weeks), stocktake, storage upgrades
+- Inventory tracked by supply category as $-value on hand + incoming purchase orders
+- Orders use supplier lead times, reliability delays, market price indexes and contract discounts
+- Weekly spoilage + shrink (reduced for a few weeks after stocktake)
+- Stockouts trigger emergency buying + satisfaction penalties
+- Ops: Inventory snapshot (waste, stockouts, emergency, on-hand, incoming)
+
+
+v1.18 — Facilities (Maintenance + Breakdowns + Energy + Renovations)
+- New Facilities tab per venue: maintenance level slider, issues list, renovations (refresh/kitchen/full)
+- Weekly maintenance spend and utilities cost (energy) scale with covers and condition
+- Random equipment breakdowns can cause downtime and reduce speed/food (and fridge can hit compliance)
+- Ops: Facilities snapshot card
+
+
+v1.18.1 — Setup & Tutorials
+- New Setup & Tutorials screen (route: setup) with explainers + quick navigation
+- First run opens Setup automatically until you mark it done
+- Topbar ? button returns to Setup anytime
+- Start setup wizard directly from Setup
