@@ -3,11 +3,14 @@ const KEY = "resim_v1_save";
 export function defaultState(){
   const seed = Math.floor(Math.random() * 1e9);
   return {
-    version: 4,
+    version: 5, // Bumped for tutorial system
     seed,
     route: "world",
     seenSetup: false,
-    tutorialDone: {},
+    tutorialDone: {}, // Track completed tutorials
+    tutorialProgress: {}, // Track current step in active tutorials
+    milestonesAchieved: [], // Track achieved milestones
+    activeTutorial: null, // Currently showing tutorial
     walkthrough: { active:false },
     week: 1,
     homeCityId: null,
@@ -38,6 +41,8 @@ export function defaultState(){
 
     settings: {
       realism: "realistic",
+      tutorialsEnabled: true, // Can be toggled off by experienced players
+      showHints: true, // Contextual hints
     },
 
     // Business model / brands
@@ -78,6 +83,12 @@ export function loadState(){
 
 function migrate(s){
   if(!s.version) s.version = 1;
+
+  // Tutorial system (v5)
+  if(!s.tutorialDone) s.tutorialDone = {};
+  if(!s.tutorialProgress) s.tutorialProgress = {};
+  if(!Array.isArray(s.milestonesAchieved)) s.milestonesAchieved = [];
+  if(s.activeTutorial === undefined) s.activeTutorial = null;
 
   if(!Array.isArray(s.netHistory)) s.netHistory = [];
   if(!("sold" in s)) s.sold = null;
@@ -172,6 +183,12 @@ function migrate(s){
 
     // Facilities
     if(!v.facilities) v.facilities = { condition:75, maintenanceLevel:1.0, downtimeWeeks:0, activeIssues:[], equipment:{}, renovation:null };
+    
+    // Track last week metrics for hints
+    if(v.lastSatisfaction === undefined) v.lastSatisfaction = 75;
+    if(v.lastNetProfit === undefined) v.lastNetProfit = 0;
+    if(v.lastFoodCostPct === undefined) v.lastFoodCostPct = 0.30;
+    
     if(v.customer){
       if(v.customer.regulars == null) v.customer.regulars = (v.regulars||0);
       if(!v.customer.inbox) v.customer.inbox = [];
@@ -188,11 +205,13 @@ function migrate(s){
     }
   }
 
-  // Keep version at least 4
-  if(s.version < 4) s.version = 4;
+  // Keep version at least 5 for tutorial system
+  if(s.version < 5) s.version = 5;
 
   if(!s.settings) s.settings = { realism:"realistic" };
   if(!s.settings.realism) s.settings.realism = "realistic";
+  if(s.settings.tutorialsEnabled === undefined) s.settings.tutorialsEnabled = true;
+  if(s.settings.showHints === undefined) s.settings.showHints = true;
 
   return s;
 }
