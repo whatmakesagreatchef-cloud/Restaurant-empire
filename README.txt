@@ -130,3 +130,10 @@ v1.18.1 — Setup & Tutorials
 - First run opens Setup automatically until you mark it done
 - Topbar ? button returns to Setup anytime
 - Start setup wizard directly from Setup
+
+
+v1.18.2 — Guided Walkthrough + Critical Fix
+- Fix: UI render default route bug that caused blank screens
+- Fix: Removed stray wizard code referencing undefined needsModel
+- New: Guided walkthrough overlay (spotlight + step sheet) to walk users through first venue setup
+- Setup: added Guided walkthrough button

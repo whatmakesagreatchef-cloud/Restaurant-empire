@@ -44,8 +44,7 @@ export function render(state, setState){
     case "hq": app.appendChild(screenHQ(state, setState)); break;
     case "capital": app.appendChild(screenCapital(state, setState)); break;
     case "sell": app.appendChild(screenSell(state, setState)); break;
-    default: app.appendChild(screenWorld(state, setState));appendChild(screenWorld(state, setState));
-  }
+    default: app.appendChild(screenWorld(state, setState));}
 }
 
 
@@ -62,6 +61,7 @@ function screenSetup(state, setState){
       <div class="hr"></div>
       <div class="row" style="gap:10px; flex-wrap:wrap;">
         <button class="btn primary" id="btnStartWizard">Start setup wizard</button>
+        <button class="btn" id="btnWalkthrough">Guided walkthrough</button>
         <button class="btn" id="btnQuickStart">Quick start</button>
         <button class="btn" id="btnMarkDone">Skip / I’m good</button>
       </div>
@@ -121,6 +121,12 @@ function screenSetup(state, setState){
   wrap.querySelector("#btnStartWizard").onclick = ()=>{
     setState(s=>{ s.route="venues"; s._openWizard=true; s.seenSetup=true; return s; });
   };
+  const wtBtn = wrap.querySelector("#btnWalkthrough");
+  if(wtBtn){
+    wtBtn.onclick = ()=>{
+      setState(s=>{ s.walkthrough = { active:true, id:"first_venue", step:0 }; s.route="setup"; return s; });
+    };
+  }
   wrap.querySelector("#btnQuickStart").onclick = ()=>{
     // If no venues, jump to venues acquire
     if((state.venues||[]).length===0){
@@ -146,6 +152,119 @@ function screenSetup(state, setState){
   });
 
   return wrap;
+}
+
+
+/* -----------------------------
+   WALKTHROUGHS (interactive)
+------------------------------*/
+const WALKTHROUGHS = {
+  first_venue: {
+    title: "Open your first venue",
+    steps: [
+      { route:"setup", selector:"#btnStartWizard", title:"Start the wizard", body:"Tap <b>Start setup wizard</b> to begin acquiring your first venue." },
+      { route:"venues", selector:"#wizard", title:"Wizard opened", body:"You’re in the staged setup wizard. We’ll go step-by-step. If you don’t see the wizard, tap <b>Acquire</b>.", ensureWizard:true },
+      { route:"venues", selector:"#wizBody", title:"Pick a listing", body:"Choose a listing. <b>Lease shell</b> is cheaper to start; <b>Buy existing</b> is faster but costs more upfront." },
+      { route:"venues", selector:"#wizNext", title:"Continue steps", body:"Work through: Brand → Venue → Menu style → Staff. Then tap <b>Acquire</b> at the end." },
+      { route:"ops", selector:".card", title:"Run your first week", body:"Now go to <b>Ops</b> and simulate week-by-week. Watch Accounting / Inventory / Facilities snapshots." }
+    ]
+  }
+};
+
+function renderWalkthroughOverlay(state, setState){
+  const wt = state.walkthrough || {};
+  const def = WALKTHROUGHS[wt.id];
+  if(!def) return document.createElement("div");
+
+  const idx = clamp(wt.step||0, 0, def.steps.length-1);
+  const step = def.steps[idx];
+
+  // Ensure we're on the right screen
+  if(step.route && state.route !== step.route){
+    // jump route
+    setTimeout(()=>setState(s=>{ s.route = step.route; return s; }), 0);
+  }
+
+  // Ensure wizard if requested
+  if(step.ensureWizard && state.route==="venues" && !state._openWizard){
+    setTimeout(()=>setState(s=>{ s._openWizard = true; return s; }), 0);
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "wtOverlay";
+
+  // Find target element
+  let target = null;
+  try{
+    target = step.selector ? document.querySelector(step.selector) : null;
+  }catch(_e){ target = null; }
+
+  if(target){
+    const r = target.getBoundingClientRect();
+    overlay.style.setProperty("--wt-x", `${Math.max(8, r.left)}px`);
+    overlay.style.setProperty("--wt-y", `${Math.max(8, r.top)}px`);
+    overlay.style.setProperty("--wt-w", `${Math.max(40, r.width)}px`);
+    overlay.style.setProperty("--wt-h", `${Math.max(30, r.height)}px`);
+  }else{
+    overlay.classList.add("wtNoTarget");
+  }
+
+  overlay.innerHTML = `
+    <div class="wtShade"></div>
+    <div class="wtSpotlight"></div>
+    <div class="wtSheet">
+      <div class="row" style="justify-content:space-between; gap:10px;">
+        <div>
+          <div class="h2">${escapeHtml(def.title)}</div>
+          <div class="small">Step ${idx+1}/${def.steps.length}: <b>${escapeHtml(step.title||"")}</b></div>
+        </div>
+        <button class="btn" data-wt="exit">Exit</button>
+      </div>
+      <div class="hr"></div>
+      <div class="small">${step.body||""}</div>
+      ${target ? "" : `<div class="small" style="margin-top:8px; opacity:.8;">(Can’t find the highlighted button yet — try scrolling or switching tabs.)</div>`}
+      <div class="hr"></div>
+      <div class="row" style="gap:10px; flex-wrap:wrap;">
+        <button class="btn" data-wt="back" ${idx===0?"disabled":""}>Back</button>
+        <button class="btn primary" data-wt="next">${idx===def.steps.length-1 ? "Finish" : "Next"}</button>
+      </div>
+    </div>
+  `;
+
+  overlay.addEventListener("click", (e)=>{
+    const b = e.target.closest("[data-wt]");
+    if(!b) return;
+    const act = b.getAttribute("data-wt");
+
+    if(act==="exit"){
+      setState(s=>{ s.walkthrough = { active:false }; return s; });
+      return;
+    }
+    if(act==="back"){
+      setState(s=>{ s.walkthrough.step = clamp((s.walkthrough.step||0)-1, 0, 999); return s; });
+      return;
+    }
+    if(act==="next"){
+      setState(s=>{
+        const last = def.steps.length-1;
+        const next = (s.walkthrough.step||0) + 1;
+        if(next > last){
+          s.walkthrough = { active:false };
+          s.seenSetup = true;
+          s.route = "ops";
+        }else{
+          s.walkthrough.step = next;
+          // If next step is ops, jump
+          const ns = def.steps[next];
+          if(ns && ns.route) s.route = ns.route;
+        }
+        return s;
+      });
+      return;
+    }
+  });
+
+  return overlay;
 }
 
 /* -----------------------------
@@ -355,6 +474,12 @@ function screenVenues(state, setState){
     renderWizard();
   }
 
+  // allow external screens (Setup/Tutorials) to request the wizard
+  if(state._openWizard){
+    openWizard();
+    setTimeout(()=>setState(s=>{ delete s._openWizard; return s; }), 0);
+  }
+
   function stepDef(){ return steps[wiz.step]; }
 
   function renderWizard(){
@@ -375,41 +500,6 @@ function screenVenues(state, setState){
   }
 
   function renderWizLocation(){
-
-  if(needsModel){
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `
-      <div class="h2">Business model</div>
-      <div class="small">Before you acquire venues: are you building a <b>chain</b> (one brand) or a <b>portfolio</b> (standalone brands)?</div>
-      <div class="hr"></div>
-      <label>Chain brand name (if chain)</label>
-      <input id="brandNameInput" placeholder="e.g., Fire & Salt" value="${escapeHtml(state.chainBrandName || "")}" />
-      <div class="row" style="gap:10px; margin-top:10px; flex-wrap:wrap;">
-        <button class="btn primary" data-setmodel="chain">Build a chain</button>
-        <button class="btn" data-setmodel="portfolio">Standalone portfolio</button>
-      </div>
-      <div class="small" style="margin-top:8px;">You can still run one venue forever — the model just changes how new venues are organised.</div>
-    `;
-    wrap.appendChild(card);
-
-    wrap.addEventListener("click", (e)=>{
-      const b = e.target.closest("[data-setmodel]");
-      if(!b) return;
-      const mode = b.getAttribute("data-setmodel");
-      const inp = wrap.querySelector("#brandNameInput");
-      const nm = inp ? inp.value : "";
-      setState(s=>{
-        setBrandMode(s, mode, nm);
-        if(mode==="portfolio" && (!s.brands || s.brands.length===0)){
-          createBrand(s, "First Venue");
-        }
-        return s;
-      });
-    });
-
-    return wrap;
-  }
 
     const listings = generateListings(state, state.homeCityId);
 

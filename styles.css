@@ -159,3 +159,38 @@ label{ display:block; font-size:12px; color: var(--muted); margin:10px 0 6px; }
   line-height: 1;
 }
 .helpbtn:active{ transform: translateY(1px); }
+
+
+/* Walkthrough overlay */
+.wtOverlay{
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: auto;
+}
+.wtShade{
+  position:absolute; inset:0;
+  background: rgba(0,0,0,.62);
+}
+.wtSpotlight{
+  position:absolute;
+  left: var(--wt-x, 16px);
+  top: var(--wt-y, 16px);
+  width: var(--wt-w, 80px);
+  height: var(--wt-h, 44px);
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.62);
+  border: 2px solid rgba(255,255,255,.55);
+  background: rgba(255,255,255,.06);
+}
+.wtNoTarget .wtSpotlight{ display:none; }
+.wtSheet{
+  position:absolute;
+  left: 12px; right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  background: rgba(10,12,18,.92);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 16px;
+  padding: 12px;
+  backdrop-filter: blur(10px);
+}
